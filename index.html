@@ -233,6 +233,18 @@
   <!-- 3. АНКЕР -->
   <div class="card">
     <h2><span class="n">3</span>Проверка анкера</h2>
+    <div class="field" style="margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px;">
+        <input type="checkbox" id="anchorUseMoment" style="width:auto;" checked> Считать вырыв через момент кронштейна (N = M / a), а не напрямую от ветра
+      </label>
+      <div class="hint">Отключайте только если M_Rd в п.2 — это паспортное значение, полученное заводом при испытании узла «кронштейн + анкер» в сборе (тогда плечо уже учтено внутри M_Rd, и здесь достаточно прямой ветровой силы).</div>
+    </div>
+    <div class="grid" id="anchorLeverWrap">
+      <div class="field">
+        <label>Плечо анкерного узла a, мм (между анкерами, либо анкер↔точка опоры пятки)</label>
+        <input type="number" id="anchorLeverArm" value="60" step="5" min="5">
+      </div>
+    </div>
     <div class="grid">
       <div class="field">
         <label>Расчётное усилие на вырыв N, кН (авто из п.2, можно править)</label>
@@ -418,6 +430,9 @@ $('snowOn').addEventListener('change', ()=>{
 $('thermalMaterial').addEventListener('change', ()=>{
   $('alphaCustomWrap').style.display = $('thermalMaterial').value==='custom' ? '' : 'none';
 });
+$('anchorUseMoment').addEventListener('change', ()=>{
+  $('anchorLeverWrap').style.display = $('anchorUseMoment').checked ? '' : 'none';
+});
 
 let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false, userTouchedThermalStep=false;
 $('anchorN').addEventListener('input', ()=>userTouchedAnchorN=true);
@@ -517,7 +532,10 @@ function calc(){
   `;
 
   // ---- 3. Анкер (авто-подстановка, если не трогали вручную) ----
-  if(!userTouchedAnchorN) $('anchorN').value = fmt(FwindDemand,3).replace(/\s/g,'').replace(',', '.');
+  const useMoment = $('anchorUseMoment').checked;
+  const leverArm_m = (parseFloat($('anchorLeverArm').value)||60)/1000;
+  const Nprying = useMoment ? Math.abs(M)/leverArm_m : FwindDemand;
+  if(!userTouchedAnchorN) $('anchorN').value = fmt(Nprying,3).replace(/\s/g,'').replace(',', '.');
   if(!userTouchedAnchorV) $('anchorV').value = fmt(Fv,3).replace(/\s/g,'').replace(',', '.');
   const N = parseFloat($('anchorN').value)||0;
   const V = parseFloat($('anchorV').value)||0;
@@ -527,6 +545,7 @@ function calc(){
   const interaction = ratioN + ratioV;
 
   $('anchorOut').innerHTML = `
+    ${useMoment ? `<div class="row"><span class="k">N = M / a = ${fmt(Math.abs(M),3)} / ${fmt(leverArm_m,3)}</span><span class="v">${fmt(Nprying,3)} кН</span></div>` : `<div class="row"><span class="k">N = прямая ветровая сила (без плеча)</span><span class="v">${fmt(Nprying,3)} кН</span></div>`}
     <div class="row"><span class="k">Использование на вырыв N/N_Rd</span><span class="v">${pill(ratioN)}</span></div>
     <div class="row"><span class="k">Использование на срез V/V_Rd</span><span class="v">${pill(ratioV)}</span></div>
     <div class="row"><span class="k">Комбинированная проверка N/N_Rd + V/V_Rd ≤ 1</span><span class="v">${pill(interaction)}</span></div>
