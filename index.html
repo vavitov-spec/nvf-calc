@@ -304,6 +304,49 @@
     <div class="out" id="profileOut"></div>
   </div>
 
+  <!-- 5. ТЕПЛОВОЕ УДЛИНЕНИЕ -->
+  <div class="card">
+    <h2><span class="n">5</span>Тепловое удлинение и разбивка кронштейнов</h2>
+    <div class="hint" style="margin-bottom:12px;">
+      На каждом непрерывном отрезке профиля должен быть ровно один <b>несущий</b> (неподвижный) кронштейн —
+      он держит вес. Остальные — <b>опорные</b> (скользящие), держат только ветер и дают профилю свободно
+      двигаться при нагреве/охлаждении. Длина отрезка ограничена ходом паза в опорном узле.
+    </div>
+    <div class="grid">
+      <div class="field">
+        <label>Материал профиля</label>
+        <select id="thermalMaterial">
+          <option value="0.000023" selected>Алюминий (α=23·10⁻⁶ 1/°C)</option>
+          <option value="0.000012">Сталь (α=12·10⁻⁶ 1/°C)</option>
+          <option value="custom">Ввести вручную →</option>
+        </select>
+      </div>
+      <div class="field" id="alphaCustomWrap" style="display:none">
+        <label>α вручную, 1/°C</label>
+        <input type="number" id="alphaCustom" value="0.000023" step="0.000001">
+      </div>
+      <div class="field">
+        <label>ΔT — расчётный перепад температуры профиля, °C</label>
+        <input type="number" id="thermalDeltaT" value="80" step="5" min="10">
+        <div class="hint">Температура поверхности, не воздуха — для тёмных кассет на солнце обычно 70–100°C</div>
+      </div>
+      <div class="field">
+        <label>Допустимый ход в опорном узле, мм (на сторону)</label>
+        <input type="number" id="thermalGap" value="10" step="1" min="1">
+        <div class="hint">Смотрите в ТС подсистемы — обычно 8–15 мм</div>
+      </div>
+      <div class="field">
+        <label>Высота фасада / яруса под непрерывный профиль, м</label>
+        <input type="number" id="thermalHeight" value="20" step="0.5" min="0.5">
+      </div>
+      <div class="field">
+        <label>Шаг кронштейнов по вертикали, м (авто = п.2)</label>
+        <input type="number" id="thermalStep" step="0.05">
+      </div>
+    </div>
+    <div class="out" id="thermalOut"></div>
+  </div>
+
   <!-- ИТОГ -->
   <div class="card">
     <h2><span class="n">Σ</span>Итоговая сводка</h2>
@@ -372,12 +415,16 @@ $('lamellaOn').addEventListener('change', ()=>{
 $('snowOn').addEventListener('change', ()=>{
   $('snowFields').style.display = $('snowOn').checked ? '' : 'none';
 });
+$('thermalMaterial').addEventListener('change', ()=>{
+  $('alphaCustomWrap').style.display = $('thermalMaterial').value==='custom' ? '' : 'none';
+});
 
-let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false;
+let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false, userTouchedThermalStep=false;
 $('anchorN').addEventListener('input', ()=>userTouchedAnchorN=true);
 $('anchorV').addEventListener('input', ()=>userTouchedAnchorV=true);
 $('span').addEventListener('input', ()=>userTouchedSpan=true);
 $('loadWidth').addEventListener('input', ()=>userTouchedWidth=true);
+$('thermalStep').addEventListener('input', ()=>userTouchedThermalStep=true);
 
 const materials = {
   al:   {ry:110, e:70000},
@@ -525,6 +572,33 @@ function calc(){
     <div class="row"><span class="k">Использование по прочности</span><span class="v">${pill(ratioSigma)}</span></div>
     <div class="row"><span class="k">Прогиб f</span><span class="v">${fmt(f_mm,2)} мм ([f] = ${fmt(fLimit,2)} мм)</span></div>
     <div class="row"><span class="k">Использование по прогибу</span><span class="v">${pill(ratioDefl)}</span></div>
+  `;
+
+  // ---- 5. Тепловое удлинение ----
+  if(!userTouchedThermalStep) $('thermalStep').value = h;
+  const thermalMatSel = $('thermalMaterial').value;
+  const alpha = thermalMatSel==='custom' ? (parseFloat($('alphaCustom').value)||0.000023) : parseFloat(thermalMatSel);
+  const deltaT = parseFloat($('thermalDeltaT').value)||80;
+  const gap_mm = parseFloat($('thermalGap').value)||10;
+  const Htotal = parseFloat($('thermalHeight').value)||0;
+  const stepThermal = parseFloat($('thermalStep').value)||h;
+
+  const Lmax = (gap_mm/1000)/(alpha*deltaT); // м, макс. длина отрезка между несущими
+  const numSegments = Htotal>0 ? Math.max(1, Math.ceil(Htotal/Lmax)) : 0;
+  const actualSegLen = numSegments>0 ? Htotal/numSegments : 0;
+  const dLatSeg = alpha*actualSegLen*deltaT*1000; // мм, факт. удлинение отрезка
+  const totalBracketLevels = stepThermal>0 && Htotal>0 ? Math.floor(Htotal/stepThermal)+1 : 0;
+  const nesushih = numSegments;
+  const opornyh = Math.max(0, totalBracketLevels-nesushih);
+
+  $('thermalOut').innerHTML = `
+    <div class="row"><span class="k">Макс. длина отрезка между несущими L_max</span><span class="v">${fmt(Lmax,2)} м</span></div>
+    <div class="row"><span class="k">Число отрезков (= число несущих кронштейнов)</span><span class="v">${numSegments}</span></div>
+    <div class="row"><span class="k">Факт. длина одного отрезка при равной разбивке</span><span class="v">${fmt(actualSegLen,2)} м</span></div>
+    <div class="row"><span class="k">Удлинение отрезка ΔL при ΔT</span><span class="v">${fmt(dLatSeg,1)} мм (допустимо ${fmt(gap_mm,1)} мм)</span></div>
+    <div class="row"><span class="k">Всего уровней кронштейнов по высоте</span><span class="v">${totalBracketLevels}</span></div>
+    <div class="row"><span class="k">— из них несущих (неподвижных)</span><span class="v"><b>${nesushih}</b></span></div>
+    <div class="row"><span class="k">— из них опорных (скользящих)</span><span class="v"><b>${opornyh}</b></span></div>
   `;
 
   // ---- Сводка ----
