@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расчёт несущей способности НВФ</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --border:#2a3450;
+    --text:#e6e9f0; --muted:#8a93a8; --accent:#5b8dee;
+    --ok:#3ecf8e; --warn:#e8b93a; --bad:#e85d5d;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.4;
+  }
+  header{padding:24px 20px 8px; max-width:920px; margin:0 auto;}
+  h1{font-size:22px; margin:0 0 4px;}
+  .sub{color:var(--muted); font-size:13px;}
+  main{max-width:920px; margin:0 auto; padding:12px 20px 60px;}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  .card h2{font-size:15px; margin:0 0 14px; color:var(--accent); display:flex; align-items:center; gap:8px;}
+  .card h2 .n{
+    width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:12px; display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 16px;}
+  @media(max-width:600px){.grid{grid-template-columns:1fr;}}
+  label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:3px;}
+  input[type=number], select{
+    width:100%; padding:7px 9px; background:var(--panel2); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; font-size:14px;
+  }
+  input[type=checkbox]{margin-right:6px;}
+  .field{margin-bottom:10px;}
+  .hint{font-size:11px; color:var(--muted); margin-top:2px;}
+  .out{
+    margin-top:14px; padding:12px 14px; background:var(--panel2); border-radius:8px;
+    font-size:13.5px; border:1px solid var(--border);
+  }
+  .out b{color:var(--text);}
+  .out .row{display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--border);}
+  .out .row:last-child{border-bottom:none;}
+  .row .k{color:var(--muted);}
+  .row .v{font-weight:600;}
+  table{width:100%; border-collapse:collapse; margin-top:6px;}
+  th,td{text-align:left; padding:8px 10px; font-size:13.5px; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-weight:500; font-size:12px;}
+  .pill{padding:2px 9px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block;}
+  .pill.ok{background:rgba(62,207,142,.15); color:var(--ok);}
+  .pill.warn{background:rgba(232,185,58,.15); color:var(--warn);}
+  .pill.bad{background:rgba(232,93,93,.15); color:var(--bad);}
+  .disclaimer{
+    background:rgba(232,93,93,.08); border:1px solid rgba(232,93,93,.35); border-radius:8px;
+    padding:12px 14px; font-size:12.5px; color:#f0c4c4; margin-top:18px;
+  }
+  fieldset{border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px;}
+  legend{font-size:12px; color:var(--muted); padding:0 6px;}
+  .radio-row{display:flex; gap:16px; align-items:center; font-size:13px; margin-bottom:6px;}
+  .radio-row label{display:flex; align-items:center; gap:6px; margin:0; color:var(--text); font-size:13px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Расчёт несущей способности НВФ</h1>
+  <div class="sub">Ветер/вес → кронштейн → анкер → профиль. Нормативные формулы (СП 20.13330), для быстрой внутренней прикидки.</div>
+</header>
+<main>
+
+  <!-- 1. ВЕТЕР -->
+  <div class="card">
+    <h2><span class="n">1</span>Ветровая нагрузка</h2>
+    <div class="grid">
+      <div class="field">
+        <label>Ветровой район (СП 20.13330, w₀)</label>
+        <select id="region">
+          <option value="0.17">Iа — 0.17 кПа</option>
+          <option value="0.23" selected>I — 0.23 кПа</option>
+          <option value="0.30">II — 0.30 кПа</option>
+          <option value="0.38">III — 0.38 кПа</option>
+          <option value="0.48">IV — 0.48 кПа</option>
+          <option value="0.60">V — 0.60 кПа</option>
+          <option value="0.73">VI — 0.73 кПа</option>
+          <option value="0.85">VII — 0.85 кПа</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Высота расчётной точки Z, м</label>
+        <input type="number" id="z" value="20" step="0.5" min="0">
+      </div>
+      <div class="field">
+        <label>Тип местности</label>
+        <select id="terrain">
+          <option value="A">A — открытая (поле, вода)</option>
+          <option value="B" selected>B — городская застройка/лес</option>
+          <option value="C">C — плотная застройка &gt;25 м</option>
+        </select>
+        <div class="hint">Приближённая интерполяция по табл. 11.2 СП 20.13330</div>
+      </div>
+      <div class="field">
+        <label>Зона / аэродинамический коэффициент c</label>
+        <select id="czone">
+          <option value="0.8">Наветренная стена, приток (+0.8)</option>
+          <option value="-0.5" selected>Рядовая зона, отсос (−0.5)</option>
+          <option value="-0.8">Угловая зона B, отсос (−0.8)</option>
+          <option value="-1.3">Угловая зона A (край здания), отсос (−1.3)</option>
+          <option value="-1.6">Парапет/аттик, отсос (−1.6)</option>
+          <option value="custom">Ввести вручную →</option>
+        </select>
+      </div>
+      <div class="field" id="cCustomWrap" style="display:none">
+        <label>c вручную</label>
+        <input type="number" id="cCustom" value="-0.5" step="0.05">
+      </div>
+      <div class="field">
+        <label>γf — коэфф. надёжности по ветру</label>
+        <input type="number" id="gammaWind" value="1.4" step="0.05">
+      </div>
+    </div>
+    <div class="out" id="windOut"></div>
+  </div>
+
+  <!-- 2. КРОНШТЕЙН -->
+  <div class="card">
+    <h2><span class="n">2</span>Нагрузка на кронштейн</h2>
+    <div class="grid">
+      <div class="field">
+        <label>Шаг кронштейнов по горизонтали b, м</label>
+        <input type="number" id="stepH" value="0.6" step="0.05" min="0.05">
+      </div>
+      <div class="field">
+        <label>Шаг кронштейнов по вертикали h, м</label>
+        <input type="number" id="stepV" value="0.5" step="0.05" min="0.05">
+      </div>
+      <div class="field">
+        <label>Вылет кронштейна e, м (плечо момента)</label>
+        <input type="number" id="arm" value="0.15" step="0.01" min="0.01">
+      </div>
+      <div class="field">
+        <label>Вес облицовки, кг/м²</label>
+        <input type="number" id="cladWeight" value="15" step="0.5" min="0">
+      </div>
+      <div class="field">
+        <label>Вес подсистемы (проф. + крепёж), кг/м²</label>
+        <input type="number" id="subWeight" value="5" step="0.5" min="0">
+      </div>
+      <div class="field">
+        <label>γf — собственный вес</label>
+        <input type="number" id="gammaWeight" value="1.1" step="0.05">
+      </div>
+    </div>
+    <fieldset>
+      <legend>Горизонтальные ламели на подсистеме (доп. нагрузка, консоль в створе кронштейна)</legend>
+      <div class="field" style="margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px;">
+          <input type="checkbox" id="lamellaOn" style="width:auto;"> Учитывать нагрузку от ламелей на этом кронштейне
+        </label>
+      </div>
+      <div class="grid" id="lamellaFields" style="display:none">
+        <div class="field">
+          <label>Ширина ламели (сечение), мм</label>
+          <input type="number" id="lamWidth" value="150" step="5" min="1">
+        </div>
+        <div class="field">
+          <label>Вылет ламели от плоскости подсистемы, мм</label>
+          <input type="number" id="lamVylet" value="100" step="5" min="0">
+          <div class="hint">Плечо момента считается от анкера: вылет кронштейна e + этот вылет</div>
+        </div>
+        <div class="field">
+          <label>Вес ламели, кг/пог.м</label>
+          <input type="number" id="lamWeight" value="" step="0.1" min="0" placeholder="кг/пог.м">
+        </div>
+        <div class="field">
+          <label>Шаг ламелей по высоте фасада, мм</label>
+          <input type="number" id="lamStep" value="" step="10" min="10" placeholder="мм">
+        </div>
+        <div class="field">
+          <label>Коэфф. паруса ламели (к давлению ветра w)</label>
+          <input type="number" id="lamCFactor" value="1.2" step="0.05" min="0.5">
+          <div class="hint">Ламель на вылете парусит сильнее плоской кассеты (эффект козырька/крыла) — ориентировочно 1.2–1.5, уточняйте по ТС профиля</div>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Допустимая несущая способность кронштейна (из ТС)</legend>
+      <div class="grid">
+        <div class="field">
+          <label>Допустимый момент M_Rd, кН·м</label>
+          <input type="number" id="bracketMrd" value="0.35" step="0.01" min="0">
+        </div>
+        <div class="field">
+          <label>Допустимая вертикальная нагрузка F_Rd, кН</label>
+          <input type="number" id="bracketFrd" value="3.0" step="0.1" min="0">
+        </div>
+      </div>
+    </fieldset>
+    <div class="out" id="bracketOut"></div>
+  </div>
+
+  <!-- 3. АНКЕР -->
+  <div class="card">
+    <h2><span class="n">3</span>Проверка анкера</h2>
+    <div class="grid">
+      <div class="field">
+        <label>Расчётное усилие на вырыв N, кН (авто из п.2, можно править)</label>
+        <input type="number" id="anchorN" step="0.01">
+      </div>
+      <div class="field">
+        <label>Расчётное усилие на срез V, кН (авто из п.2, можно править)</label>
+        <input type="number" id="anchorV" step="0.01">
+      </div>
+      <div class="field">
+        <label>Допустимая нагрузка на вырыв N_Rd, кН (из ETA/ТС анкера)</label>
+        <input type="number" id="anchorNrd" value="4.0" step="0.1" min="0.01">
+      </div>
+      <div class="field">
+        <label>Допустимая нагрузка на срез V_Rd, кН (из ETA/ТС анкера)</label>
+        <input type="number" id="anchorVrd" value="3.0" step="0.1" min="0.01">
+      </div>
+    </div>
+    <div class="hint">Основание (бетон/кладка), краевые и осевые расстояния анкер-специфичны — здесь не учитываются. Берите N_Rd/V_Rd уже с учётом понижающих коэффициентов из ETA конкретного анкера.</div>
+    <div class="out" id="anchorOut"></div>
+  </div>
+
+  <!-- 4. ПРОФИЛЬ -->
+  <div class="card">
+    <h2><span class="n">4</span>Проверка несущего профиля</h2>
+    <div class="grid">
+      <div class="field">
+        <label>Пролёт между опорами L, м (авто = шаг по вертикали)</label>
+        <input type="number" id="span" step="0.05">
+      </div>
+      <div class="field">
+        <label>Грузовая ширина на профиль, м (авто = шаг по горизонтали)</label>
+        <input type="number" id="loadWidth" step="0.05">
+      </div>
+      <div class="field">
+        <label>Материал</label>
+        <select id="material">
+          <option value="al" selected>Алюминий АД31Т1 (Ry=110 МПа, E=70000 МПа)</option>
+          <option value="s245">Сталь С245 (Ry=235 МПа, E=206000 МПа)</option>
+          <option value="s255">Сталь С255 (Ry=245 МПа, E=206000 МПа)</option>
+          <option value="custom">Ввести вручную →</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>γm — коэфф. надёжности по материалу</label>
+        <input type="number" id="gammaM" value="1.1" step="0.01">
+      </div>
+      <div class="field" id="ryCustomWrap" style="display:none">
+        <label>Ry вручную, МПа</label>
+        <input type="number" id="ryCustom" value="110" step="1">
+      </div>
+      <div class="field" id="eCustomWrap" style="display:none">
+        <label>E вручную, МПа</label>
+        <input type="number" id="eCustom" value="70000" step="1000">
+      </div>
+      <div class="field">
+        <label>Момент сопротивления сечения Wx, см³</label>
+        <input type="number" id="wx" value="1.5" step="0.05" min="0.01">
+      </div>
+      <div class="field">
+        <label>Момент инерции сечения Ix, см⁴</label>
+        <input type="number" id="ix" value="3.0" step="0.1" min="0.01">
+      </div>
+      <div class="field">
+        <label>Предельный прогиб [f] = L / n, n =</label>
+        <input type="number" id="deflLimit" value="200" step="10" min="50">
+      </div>
+    </div>
+    <div class="out" id="profileOut"></div>
+  </div>
+
+  <!-- ИТОГ -->
+  <div class="card">
+    <h2><span class="n">Σ</span>Итоговая сводка</h2>
+    <table>
+      <thead><tr><th>Проверка</th><th>Расчёт</th><th>Допустимо</th><th>Использование</th><th>Статус</th></tr></thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+  </div>
+
+  <div class="disclaimer">
+    Инструмент даёт предварительную прикидку по нормативным формулам (СП 20.13330) и типовой методике
+    проверки НВФ. Коэффициенты k(z) и c — приближённые табличные значения, аэродинамическое зонирование
+    здания и параметры конкретного анкера/кронштейна/профиля здесь упрощены. Не заменяет расчёт,
+    подписанный ГИП/сертифицированным инженером, и техническое свидетельство системы. Для объектов
+    с высокой ценой ошибки — обязательна проверка специалистом.
+  </div>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// k(ze) reference table (approx., СП 20.13330 табл. 11.2)
+const K_TABLE = {
+  heights: [5,10,20,40,60,80,100],
+  A: [0.75,1.0,1.25,1.5,1.7,1.85,2.0],
+  B: [0.5,0.65,0.85,1.1,1.3,1.45,1.6],
+  C: [0.4,0.4,0.55,0.8,1.0,1.15,1.25],
+};
+function kze(z, terrain){
+  const h = K_TABLE.heights, k = K_TABLE[terrain];
+  if(z<=h[0]) return k[0];
+  if(z>=h[h.length-1]) return k[k.length-1];
+  for(let i=0;i<h.length-1;i++){
+    if(z>=h[i] && z<=h[i+1]){
+      const t = (z-h[i])/(h[i+1]-h[i]);
+      return k[i] + t*(k[i+1]-k[i]);
+    }
+  }
+  return k[k.length-1];
+}
+
+function fmt(n, d=3){
+  if(!isFinite(n)) return '—';
+  return n.toLocaleString('ru-RU', {minimumFractionDigits:0, maximumFractionDigits:d});
+}
+
+function pill(ratio){
+  let cls='ok', txt='ОК';
+  if(ratio>1){ cls='bad'; txt='Не проходит'; }
+  else if(ratio>0.8){ cls='warn'; txt='Внимание'; }
+  return `<span class="pill ${cls}">${txt} (${fmt(ratio*100,0)}%)</span>`;
+}
+
+$('czone').addEventListener('change', ()=>{
+  $('cCustomWrap').style.display = $('czone').value==='custom' ? '' : 'none';
+});
+$('material').addEventListener('change', ()=>{
+  const custom = $('material').value==='custom';
+  $('ryCustomWrap').style.display = custom ? '' : 'none';
+  $('eCustomWrap').style.display = custom ? '' : 'none';
+});
+$('lamellaOn').addEventListener('change', ()=>{
+  $('lamellaFields').style.display = $('lamellaOn').checked ? '' : 'none';
+});
+
+let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false;
+$('anchorN').addEventListener('input', ()=>userTouchedAnchorN=true);
+$('anchorV').addEventListener('input', ()=>userTouchedAnchorV=true);
+$('span').addEventListener('input', ()=>userTouchedSpan=true);
+$('loadWidth').addEventListener('input', ()=>userTouchedWidth=true);
+
+const materials = {
+  al:   {ry:110, e:70000},
+  s245: {ry:235, e:206000},
+  s255: {ry:245, e:206000},
+};
+
+function calc(){
+  // ---- 1. Ветер ----
+  const w0 = parseFloat($('region').value);
+  const z = parseFloat($('z').value)||0;
+  const terrain = $('terrain').value;
+  const k = kze(z, terrain);
+  const cSel = $('czone').value;
+  const c = cSel==='custom' ? parseFloat($('cCustom').value||0) : parseFloat(cSel);
+  const gWind = parseFloat($('gammaWind').value)||1.4;
+  const wCalc = gWind * w0 * k * c; // kPa, signed
+
+  $('windOut').innerHTML = `
+    <div class="row"><span class="k">k(z)</span><span class="v">${fmt(k,2)}</span></div>
+    <div class="row"><span class="k">w = γf·w₀·k·c</span><span class="v">${fmt(wCalc,3)} кПа</span></div>
+    <div class="row"><span class="k">Знак</span><span class="v">${wCalc<0?'отсос (растяжение)':'приток (сжатие)'}</span></div>
+  `;
+
+  // ---- 2. Кронштейн ----
+  const b = parseFloat($('stepH').value)||0.6;
+  const h = parseFloat($('stepV').value)||0.5;
+  const e = parseFloat($('arm').value)||0.15;
+  const A = b*h;
+  const Fw = wCalc*A; // kN, signed
+  const cladW = parseFloat($('cladWeight').value)||0;
+  const subW = parseFloat($('subWeight').value)||0;
+  const gW = parseFloat($('gammaWeight').value)||1.1;
+  const FvCassette = (cladW+subW)*A*9.80665/1000*gW; // kN
+  const Mcassette = Math.abs(Fw)*e; // kN*m
+
+  // ---- Ламели (доп. нагрузка на этот же кронштейн) ----
+  const lamOn = $('lamellaOn').checked;
+  let lamRows=0, lamFwind=0, lamFv=0, lamMoment=0;
+  if(lamOn){
+    const lamWidth_m = (parseFloat($('lamWidth').value)||0)/1000;
+    const lamVylet_m = (parseFloat($('lamVylet').value)||0)/1000;
+    const lamWeight = parseFloat($('lamWeight').value)||0; // kg/m
+    const lamStep_m = (parseFloat($('lamStep').value)||0)/1000;
+    const lamC = parseFloat($('lamCFactor').value)||1.2;
+    lamRows = lamStep_m>0 ? Math.ceil(h/lamStep_m) : 0;
+    const FwindRow = Math.abs(wCalc)*(lamWidth_m*b)*lamC; // kN на один ряд ламели
+    const FweightRow = lamWeight*b*9.80665/1000*gW; // kN на один ряд
+    lamFwind = FwindRow*lamRows;
+    lamFv = FweightRow*lamRows;
+    lamMoment = lamFwind*(e+lamVylet_m); // плечо: вылет кронштейна + вылет ламели
+  }
+
+  const M = Mcassette + lamMoment; // kN*m, итого на кронштейн
+  const Fv = FvCassette + lamFv; // kN, итого вертикальная
+  const FwindDemand = Math.abs(Fw) + lamFwind; // kN, итого горизонтальная (для анкера)
+
+  const Mrd = parseFloat($('bracketMrd').value)||0.0001;
+  const Frd = parseFloat($('bracketFrd').value)||0.0001;
+  const ratioM = M/Mrd;
+  const ratioF = Fv/Frd;
+  const bracketRatio = Math.max(ratioM, ratioF);
+
+  $('bracketOut').innerHTML = `
+    <div class="row"><span class="k">Грузовая площадь A = b·h</span><span class="v">${fmt(A,3)} м²</span></div>
+    <div class="row"><span class="k">Ветровое усилие на кассету Fw</span><span class="v">${fmt(Fw,3)} кН</span></div>
+    <div class="row"><span class="k">Момент от кассеты Mcassette = |Fw|·e</span><span class="v">${fmt(Mcassette,3)} кН·м</span></div>
+    ${lamOn ? `
+    <div class="row"><span class="k">Число рядов ламелей на кронштейн</span><span class="v">${lamRows}</span></div>
+    <div class="row"><span class="k">Ветровое усилие от ламелей</span><span class="v">${fmt(lamFwind,3)} кН</span></div>
+    <div class="row"><span class="k">Вес ламелей</span><span class="v">${fmt(lamFv,3)} кН</span></div>
+    <div class="row"><span class="k">Момент от ламелей</span><span class="v">${fmt(lamMoment,3)} кН·м</span></div>
+    ` : ''}
+    <div class="row"><span class="k">Момент итого M</span><span class="v">${fmt(M,3)} кН·м</span></div>
+    <div class="row"><span class="k">Вертикальная нагрузка итого Fv</span><span class="v">${fmt(Fv,3)} кН</span></div>
+    <div class="row"><span class="k">Использование по моменту</span><span class="v">${pill(ratioM)}</span></div>
+    <div class="row"><span class="k">Использование по вертикали</span><span class="v">${pill(ratioF)}</span></div>
+  `;
+
+  // ---- 3. Анкер (авто-подстановка, если не трогали вручную) ----
+  if(!userTouchedAnchorN) $('anchorN').value = fmt(FwindDemand,3).replace(/\s/g,'').replace(',', '.');
+  if(!userTouchedAnchorV) $('anchorV').value = fmt(Fv,3).replace(/\s/g,'').replace(',', '.');
+  const N = parseFloat($('anchorN').value)||0;
+  const V = parseFloat($('anchorV').value)||0;
+  const Nrd = parseFloat($('anchorNrd').value)||0.0001;
+  const Vrd = parseFloat($('anchorVrd').value)||0.0001;
+  const ratioN = N/Nrd, ratioV = V/Vrd;
+  const interaction = ratioN + ratioV;
+
+  $('anchorOut').innerHTML = `
+    <div class="row"><span class="k">Использование на вырыв N/N_Rd</span><span class="v">${pill(ratioN)}</span></div>
+    <div class="row"><span class="k">Использование на срез V/V_Rd</span><span class="v">${pill(ratioV)}</span></div>
+    <div class="row"><span class="k">Комбинированная проверка N/N_Rd + V/V_Rd ≤ 1</span><span class="v">${pill(interaction)}</span></div>
+  `;
+
+  // ---- 4. Профиль ----
+  if(!userTouchedSpan) $('span').value = h;
+  if(!userTouchedWidth) $('loadWidth').value = b;
+  const L = parseFloat($('span').value)||h;
+  const lw = parseFloat($('loadWidth').value)||b;
+  const matSel = $('material').value;
+  let Ry, Emod;
+  if(matSel==='custom'){
+    Ry = parseFloat($('ryCustom').value)||110;
+    Emod = parseFloat($('eCustom').value)||70000;
+  } else {
+    Ry = materials[matSel].ry;
+    Emod = materials[matSel].e;
+  }
+  const gm = parseFloat($('gammaM').value)||1.1;
+  const Wx = parseFloat($('wx').value)||0.0001; // cm3
+  const Ix = parseFloat($('ix').value)||0.0001; // cm4
+  const n = parseFloat($('deflLimit').value)||200;
+
+  const q = Math.abs(wCalc)*lw; // kN/m == N/mm numerically
+  const Mprof = q*L*L/8; // kN*m
+  const Mprof_Nmm = Mprof*1e6;
+  const Wx_mm3 = Wx*1000;
+  const sigma = Mprof_Nmm/Wx_mm3; // MPa
+  const RyDes = Ry/gm;
+  const ratioSigma = sigma/RyDes;
+
+  const L_mm = L*1000;
+  const Ix_mm4 = Ix*1e4;
+  const f_mm = 5*q*Math.pow(L_mm,4)/(384*Emod*Ix_mm4);
+  const fLimit = L_mm/n;
+  const ratioDefl = f_mm/fLimit;
+
+  $('profileOut').innerHTML = `
+    <div class="row"><span class="k">Погонная нагрузка q</span><span class="v">${fmt(q,3)} кН/м</span></div>
+    <div class="row"><span class="k">Момент M = qL²/8</span><span class="v">${fmt(Mprof,3)} кН·м</span></div>
+    <div class="row"><span class="k">Напряжение σ = M/Wx</span><span class="v">${fmt(sigma,1)} МПа (Ry/γm = ${fmt(RyDes,1)})</span></div>
+    <div class="row"><span class="k">Использование по прочности</span><span class="v">${pill(ratioSigma)}</span></div>
+    <div class="row"><span class="k">Прогиб f</span><span class="v">${fmt(f_mm,2)} мм ([f] = ${fmt(fLimit,2)} мм)</span></div>
+    <div class="row"><span class="k">Использование по прогибу</span><span class="v">${pill(ratioDefl)}</span></div>
+  `;
+
+  // ---- Сводка ----
+  const rows = [
+    ['Кронштейн — момент', fmt(M,3)+' кН·м', fmt(Mrd,3)+' кН·м', ratioM],
+    ['Кронштейн — вертикаль', fmt(Fv,3)+' кН', fmt(Frd,3)+' кН', ratioF],
+    ['Анкер — вырыв', fmt(N,3)+' кН', fmt(Nrd,3)+' кН', ratioN],
+    ['Анкер — срез', fmt(V,3)+' кН', fmt(Vrd,3)+' кН', ratioV],
+    ['Анкер — комбинация', fmt(interaction,2), '1.0', interaction],
+    ['Профиль — прочность', fmt(sigma,1)+' МПа', fmt(RyDes,1)+' МПа', ratioSigma],
+    ['Профиль — прогиб', fmt(f_mm,2)+' мм', fmt(fLimit,2)+' мм', ratioDefl],
+  ];
+  $('summaryBody').innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td>
+      <td>${fmt(r[3]*100,0)}%</td><td>${pill(r[3])}</td>
+    </tr>
+  `).join('');
+}
+
+document.querySelectorAll('input, select').forEach(el=>{
+  el.addEventListener('input', calc);
+  el.addEventListener('change', calc);
+});
+calc();
+</script>
+</body>
+</html>
