@@ -184,6 +184,35 @@
           <div class="hint">Ламель на вылете парусит сильнее плоской кассеты (эффект козырька/крыла) — ориентировочно 1.2–1.5, уточняйте по ТС профиля</div>
         </div>
       </div>
+      <div class="field" style="margin:14px 0 10px;">
+        <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px;">
+          <input type="checkbox" id="snowOn" style="width:auto;"> На плоскости ламели скапливается снег (широкая полка, близко к горизонтали)
+        </label>
+      </div>
+      <div class="grid" id="snowFields" style="display:none">
+        <div class="field">
+          <label>Снеговой район (СП 20.13330, s_g)</label>
+          <select id="snowRegion">
+            <option value="0.8">I — 0.8 кПа</option>
+            <option value="1.2">II — 1.2 кПа</option>
+            <option value="1.8" selected>III — 1.8 кПа</option>
+            <option value="2.4">IV — 2.4 кПа</option>
+            <option value="3.2">V — 3.2 кПа</option>
+            <option value="4.0">VI — 4.0 кПа</option>
+            <option value="4.8">VII — 4.8 кПа</option>
+            <option value="5.6">VIII — 5.6 кПа</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>μ — коэфф. перехода к снеговой нагрузке на ламель</label>
+          <input type="number" id="snowMu" value="1.0" step="0.1" min="0">
+          <div class="hint">1.0 — снег лежит свободно; если ламель у стены и возможен надув/скопление — берите больше (1.5–2 и выше)</div>
+        </div>
+        <div class="field">
+          <label>γf — коэфф. надёжности по снегу</label>
+          <input type="number" id="snowGamma" value="1.4" step="0.05">
+        </div>
+      </div>
     </fieldset>
     <fieldset>
       <legend>Допустимая несущая способность кронштейна (из ТС)</legend>
@@ -340,6 +369,9 @@ $('material').addEventListener('change', ()=>{
 $('lamellaOn').addEventListener('change', ()=>{
   $('lamellaFields').style.display = $('lamellaOn').checked ? '' : 'none';
 });
+$('snowOn').addEventListener('change', ()=>{
+  $('snowFields').style.display = $('snowOn').checked ? '' : 'none';
+});
 
 let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false;
 $('anchorN').addEventListener('input', ()=>userTouchedAnchorN=true);
@@ -384,7 +416,7 @@ function calc(){
 
   // ---- Ламели (доп. нагрузка на этот же кронштейн) ----
   const lamOn = $('lamellaOn').checked;
-  let lamRows=0, lamFwind=0, lamFv=0, lamMoment=0;
+  let lamRows=0, lamFwind=0, lamFv=0, lamMoment=0, lamFsnow=0;
   if(lamOn){
     const lamWidth_m = (parseFloat($('lamWidth').value)||0)/1000;
     const lamVylet_m = (parseFloat($('lamVylet').value)||0)/1000;
@@ -396,6 +428,17 @@ function calc(){
     const FweightRow = lamWeight*b*9.80665/1000*gW; // kN на один ряд
     lamFwind = FwindRow*lamRows;
     lamFv = FweightRow*lamRows;
+
+    if($('snowOn').checked){
+      const sg = parseFloat($('snowRegion').value)||0; // kPa
+      const mu = parseFloat($('snowMu').value)||1.0;
+      const gSnow = parseFloat($('snowGamma').value)||1.4;
+      const sCalc = gSnow*sg*mu; // kPa
+      const FsnowRow = sCalc*(lamWidth_m*b); // kN на один ряд, по той же площади полки
+      lamFsnow = FsnowRow*lamRows;
+      lamFv += lamFsnow;
+    }
+
     lamMoment = lamFwind*(e+lamVylet_m); // плечо: вылет кронштейна + вылет ламели
   }
 
@@ -416,7 +459,8 @@ function calc(){
     ${lamOn ? `
     <div class="row"><span class="k">Число рядов ламелей на кронштейн</span><span class="v">${lamRows}</span></div>
     <div class="row"><span class="k">Ветровое усилие от ламелей</span><span class="v">${fmt(lamFwind,3)} кН</span></div>
-    <div class="row"><span class="k">Вес ламелей</span><span class="v">${fmt(lamFv,3)} кН</span></div>
+    <div class="row"><span class="k">Вес ламелей ${lamFsnow>0?'(с учётом снега)':''}</span><span class="v">${fmt(lamFv,3)} кН</span></div>
+    ${lamFsnow>0 ? `<div class="row"><span class="k">— из них снеговая нагрузка</span><span class="v">${fmt(lamFsnow,3)} кН</span></div>` : ''}
     <div class="row"><span class="k">Момент от ламелей</span><span class="v">${fmt(lamMoment,3)} кН·м</span></div>
     ` : ''}
     <div class="row"><span class="k">Момент итого M</span><span class="v">${fmt(M,3)} кН·м</span></div>
