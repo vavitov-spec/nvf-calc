@@ -257,6 +257,40 @@
       </div>
     </fieldset>
     <fieldset>
+      <legend>Каталог UTECH MFT-MF (Light) — опционально</legend>
+      <div class="grid">
+        <div class="field">
+          <label>Кронштейн из каталога (альбом тех. решений UTECH VFH Composite)</label>
+          <select id="utechBracket">
+            <option value="">Не использовать каталог</option>
+            <option value="al-155">MFT-MF, алюминий 6060Т6, h=155мм (LH)</option>
+            <option value="al-130">MFT-MF, алюминий 6060Т6, h=130мм (L)</option>
+            <option value="al-105">MFT-MF, алюминий 6060Т6, h=105мм (LM)</option>
+            <option value="al-75">MFT-MF, алюминий 6060Т6, h=75мм (M)</option>
+            <option value="al-55">MFT-MF, алюминий 6060Т6, h=55мм (S)</option>
+            <option value="sts-155">MFT-MF, нерж.сталь AISI430, h=155мм (LH StS)</option>
+            <option value="sts-130">MFT-MF, нерж.сталь AISI430, h=130мм (L StS)</option>
+            <option value="sts-105">MFT-MF, нерж.сталь AISI430, h=105мм (LM StS)</option>
+            <option value="sts-75">MFT-MF, нерж.сталь AISI430, h=75мм (M StS)</option>
+          </select>
+          <div class="hint">Вылет кронштейна берётся из поля «Вылет кронштейна e» выше (в каталоге он не влияет на сечение). Сечение 2-2 (место передачи момента) — по данным альбома, стр.7-15.</div>
+        </div>
+        <div class="field">
+          <label>Wx сечения 2-2, см³ (авто из каталога, можно править)</label>
+          <input type="number" id="utechWx" step="0.001" min="0">
+        </div>
+        <div class="field">
+          <label>Ry материала кронштейна, МПа (ориентировочно, уточняйте у UTECH)</label>
+          <input type="number" id="utechRy" step="1" min="0">
+        </div>
+        <div class="field">
+          <label>γm — коэфф. надёжности по материалу кронштейна</label>
+          <input type="number" id="utechGammaM" value="1.1" step="0.01" min="1">
+        </div>
+      </div>
+      <div class="hint">M_Rd ниже считается как Wx·Ry/γm — это <b>оценка по сечению</b>, не паспортное испытанное значение (в альбоме UTECH готовое допустимое усилие не приводится, там указано «рассчитать» / «анкер принять по результатам испытаний»). Для реального проекта проверяйте у технического консультанта UTECH.</div>
+    </fieldset>
+    <fieldset>
       <legend>Допустимая несущая способность кронштейна (из ТС)</legend>
       <div class="grid">
         <div class="field">
@@ -505,18 +539,44 @@ $('anchorUseMoment').addEventListener('change', ()=>{
   $('anchorLeverWrap').style.display = $('anchorUseMoment').checked ? '' : 'none';
 });
 
-let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false, userTouchedThermalStep=false;
+let userTouchedAnchorN=false, userTouchedAnchorV=false, userTouchedSpan=false, userTouchedWidth=false, userTouchedThermalStep=false, userTouchedBracketMrd=false;
 $('anchorN').addEventListener('input', ()=>userTouchedAnchorN=true);
 $('anchorV').addEventListener('input', ()=>userTouchedAnchorV=true);
 $('span').addEventListener('input', ()=>userTouchedSpan=true);
 $('loadWidth').addEventListener('input', ()=>userTouchedWidth=true);
 $('thermalStep').addEventListener('input', ()=>userTouchedThermalStep=true);
+$('bracketMrd').addEventListener('input', ()=>userTouchedBracketMrd=true);
 
 const materials = {
   al:   {ry:110, e:70000},
   s245: {ry:235, e:206000},
   s255: {ry:245, e:206000},
 };
+
+// Каталог UTECH MFT-MF (Light), альбом тех.решений VFH Composite, стр.7-15.
+// Wx2 — момент сопротивления сечения 2-2 (см3), Ry — ориентировочная расчётная характеристика материала (МПа), уточнять у UTECH.
+const UTECH_MFMF = {
+  'al-155':  {wx2:12.413, ry:160}, // алюминий 6060Т6, h=155 (LH)
+  'al-130':  {wx2:8.732,  ry:160}, // h=130 (L)
+  'al-105':  {wx2:5.696,  ry:160}, // h=105 (LM)
+  'al-75':   {wx2:2.887,  ry:160}, // h=75 (M)
+  'al-55':   {wx2:1.563,  ry:160}, // h=55 (S)
+  'sts-155': {wx2:10.010, ry:205}, // нерж.сталь AISI430, h=155 (LH StS)
+  'sts-130': {wx2:7.042,  ry:205}, // h=130 (L StS)
+  'sts-105': {wx2:4.594,  ry:205}, // h=105 (LM StS)
+  'sts-75':  {wx2:2.344,  ry:205}, // h=75 (M StS)
+};
+$('utechBracket').addEventListener('change', ()=>{
+  const key = $('utechBracket').value;
+  if(key && UTECH_MFMF[key]){
+    $('utechWx').value = UTECH_MFMF[key].wx2;
+    $('utechRy').value = UTECH_MFMF[key].ry;
+    userTouchedBracketMrd = false;
+  }
+});
+$('utechWx').addEventListener('input', ()=>userTouchedBracketMrd=false);
+$('utechRy').addEventListener('input', ()=>userTouchedBracketMrd=false);
+$('utechGammaM').addEventListener('input', ()=>userTouchedBracketMrd=false);
 
 function calc(){
   // ---- 1. Ветер ----
@@ -589,6 +649,13 @@ function calc(){
   const Fv = FvCassette + lamFv; // kN, итого вертикальная
   const FwindDemand = Math.abs(Fw) + lamFwind; // kN, итого горизонтальная (для анкера)
 
+  if($('utechBracket').value && !userTouchedBracketMrd){
+    const utechWx = parseFloat($('utechWx').value)||0; // cm3
+    const utechRy = parseFloat($('utechRy').value)||0; // MPa
+    const utechGm = parseFloat($('utechGammaM').value)||1.1;
+    const MrdUtech = utechWx*utechRy/utechGm/1000; // kN*m
+    $('bracketMrd').value = MrdUtech.toFixed(4);
+  }
   const Mrd = parseFloat($('bracketMrd').value)||0.0001;
   const Frd = parseFloat($('bracketFrd').value)||0.0001;
   const ratioM = M/Mrd;
